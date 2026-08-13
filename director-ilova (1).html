@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direktor — Davomat nazorati</title>
+
+<!-- Ilova (PWA) sifatida o'rnatish uchun -->
+<link rel="manifest" href="director-manifest.json">
+<meta name="theme-color" content="#152238">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Direktor">
+<link rel="apple-touch-icon" href="director-icon-180.png">
+<link rel="icon" href="director-icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --navy:#152238;
+    --navy-2:#1f3252;
+    --gold:#c9972f;
+    --gold-dim:#e6c878;
+    --paper:#f6f3ec;
+    --paper-2:#ffffff;
+    --ink:#1c1c1c;
+    --muted:#6b7280;
+    --line:#e4ded0;
+    --ok:#2f7a4f;
+    --bad:#b0402c;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+  }
+  .shell{max-width:480px;margin:0 auto;min-height:100vh;background:var(--paper);display:flex;flex-direction:column;}
+  header{
+    background:linear-gradient(160deg,var(--navy),var(--navy-2));
+    color:#fff; padding:22px 20px 26px;
+    position:relative; overflow:hidden;
+  }
+  header::after{
+    content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;
+    border-radius:50%;background:radial-gradient(circle,rgba(201,151,47,.35),transparent 70%);
+  }
+  header .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-dim);font-weight:600;}
+  header h1{font-family:'Manrope',sans-serif;font-weight:800;font-size:22px;margin:6px 0 2px;}
+  header .sub{font-size:13px;color:#c9d2e0;}
+
+  nav{display:flex;background:var(--paper-2);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;}
+  nav button{
+    flex:1;padding:13px 4px;background:none;border:none;font-family:'Inter';font-size:12.5px;font-weight:600;
+    color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;
+  }
+  nav button.active{color:var(--navy);border-bottom-color:var(--gold);}
+
+  main{flex:1;padding:18px 18px 40px;}
+  section{display:none;}
+  section.active{display:block;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  .card{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;}
+  .card h2{font-family:'Manrope';font-size:15px;margin:0 0 4px;font-weight:700;}
+  .card p.hint{font-size:12.5px;color:var(--muted);margin:0 0 12px;line-height:1.5;}
+
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 5px;}
+  label:first-of-type{margin-top:0;}
+  input[type=text],input[type=number]{
+    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px;
+    font-family:'Inter';background:#fdfcf9;
+  }
+  input:focus{outline:2px solid var(--gold-dim);outline-offset:1px;}
+
+  .row{display:flex;gap:10px;}
+  .row > *{flex:1;}
+
+  button.primary{
+    width:100%;padding:12px;border:none;border-radius:9px;background:var(--navy);color:#fff;
+    font-weight:700;font-size:14px;cursor:pointer;margin-top:14px;font-family:'Inter';
+  }
+  button.primary:active{background:var(--navy-2);}
+  button.gold{background:var(--gold);color:#241a02;}
+  button.ghost{background:none;border:1px solid var(--line);color:var(--navy);}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+
+  .status-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 10px;border-radius:999px;}
+  .status-pill.ok{background:#e6f2ea;color:var(--ok);}
+  .status-pill.bad{background:#fbe9e5;color:var(--bad);}
+  .dot{width:7px;height:7px;border-radius:50%;background:currentColor;}
+
+  #qrcode{display:flex;justify-content:center;padding:14px 0 4px;}
+  #qrcode img,#qrcode canvas{border-radius:8px;border:6px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.08);}
+  .qr-meta{text-align:center;font-size:12px;color:var(--muted);margin-top:6px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 4px;border-bottom:1px solid var(--line);}
+  td{padding:8px 4px;border-bottom:1px solid #efece2;}
+  .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;}
+  .tag.in{background:#e6f2ea;color:var(--ok);}
+  .tag.out{background:#eef1f7;color:var(--navy-2);}
+  .empty{text-align:center;color:var(--muted);font-size:13px;padding:26px 10px;}
+
+  .staff-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #efece2;font-size:13.5px;}
+  .staff-item button{background:none;border:none;color:var(--bad);font-size:12px;cursor:pointer;font-weight:600;}
+
+  .toast{
+    position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+    background:var(--navy);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;
+    font-weight:600;opacity:0;pointer-events:none;transition:opacity .25s, bottom .25s;z-index:50;max-width:90%;text-align:center;
+  }
+  .toast.show{opacity:1;bottom:28px;}
+  .locked-note{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5;}
+  .setup-banner{
+    background:#fbe9e5;color:#7a2c1a;font-size:12.5px;padding:10px 16px;line-height:1.5;
+    border-bottom:1px solid #f0c9bd;display:none;
+  }
+  .setup-banner.show{display:block;}
+  .setup-banner code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="setup-banner" id="setupBanner">
+    ⚠️ Ilova hali bulutga ulanmagan. Fayl ichidagi <code>firebaseConfig</code> qismini to'ldiring — pastdagi "O'rnatish yo'riqnomasi" faylida bosqichma-bosqich tushuntirilgan.
+  </div>
+  <header>
+    <div class="eyebrow">Direktor paneli</div>
+    <h1 id="headerSchool">Maktab davomat nazorati</h1>
+    <div class="sub">Xodimlar kelish/ketish vaqtini real vaqtda kuzating</div>
+  </header>
+
+  <nav>
+    <button data-tab="tab-settings" class="active">Sozlamalar</button>
+    <button data-tab="tab-qr">QR kod</button>
+    <button data-tab="tab-log">Bugungi jadval</button>
+  </nav>
+
+  <main>
+    <!-- SETTINGS -->
+    <section id="tab-settings" class="active">
+      <div class="card">
+        <h2>Maktab va joylashuv</h2>
+        <p class="hint">Ushbu joylashuv "haqiqiy nuqta" sifatida saqlanadi. O'qituvchi ilovasi shu nuqtadan belgilangan radius ichida bo'lgandagina QR skanerlashga ruxsat beradi.</p>
+        <label>Maktab nomi</label>
+        <input type="text" id="schoolName" placeholder="Masalan: 21-maktab">
+        <div class="row">
+          <div>
+            <label>Kenglik (latitude)</label>
+            <input type="text" id="lat" placeholder="41.3111" readonly>
+          </div>
+          <div>
+            <label>Uzunlik (longitude)</label>
+            <input type="text" id="lng" placeholder="69.2797" readonly>
+          </div>
+        </div>
+        <label>Ruxsat etilgan radius (metr)</label>
+        <input type="number" id="radius" value="80" min="10" max="1000">
+        <button class="primary" id="btnLocate">📍 Joriy joylashuvni maktab nuqtasi sifatida belgilash</button>
+        <div id="locStatus" class="locked-note"></div>
+      </div>
+
+      <div class="card">
+        <h2>Xodimlar ro'yxati</h2>
+        <p class="hint">O'qituvchi ilovasida ism shu ro'yxatdan tanlanadi.</p>
+        <div class="row">
+          <input type="text" id="newStaffName" placeholder="F.I.Sh. kiriting">
+          <button class="primary" style="width:auto;padding:10px 16px;margin-top:0;" id="btnAddStaff">Qo'shish</button>
+        </div>
+        <div id="staffList" style="margin-top:12px;"></div>
+      </div>
+
+      <div class="card">
+        <h2>Telegramga avtomatik yuborish</h2>
+        <p class="hint">Ushbu ma'lumot faqat shu qurilmada saqlanadi. Bot yaratish uchun Telegramda @BotFather ga yozing, so'ng botni guruhingizga admin qilib qo'shing.</p>
+        <label>Bot tokeni</label>
+        <input type="text" id="botToken" placeholder="123456:ABC-...">
+        <label>Chat ID (guruh yoki shaxsiy)</label>
+        <input type="text" id="chatId" placeholder="-1001234567890">
+        <button class="primary ghost" id="btnSaveTelegram">Sozlamani saqlash</button>
+      </div>
+    </section>
+
+    <!-- QR -->
+    <section id="tab-qr">
+      <div class="card">
+        <h2>Doimiy QR kod</h2>
+        <p class="hint">Bu QR kodni bir marta chop etib, maktab kirish eshigi yoniga doimiy osib qo'ying. U har kuni bir xil ishlaydi va qayta yaratish shart emas. QR o'g'irlanib qolgan yoki tarqalib ketgan taqdirdagina "Almashtirish" tugmasidan foydalaning — bunda eski QR darhol ishdan chiqadi.</p>
+        <div id="qrcode"></div>
+        <div class="qr-meta" id="qrMeta">QR hali yaratilmagan</div>
+        <button class="primary gold" id="btnNewQr">🔄 QR kodni almashtirish (faqat zarurat bo'lsa)</button>
+      </div>
+    </section>
+
+    <!-- LOG -->
+    <section id="tab-log">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h2 style="margin:0;">Bugungi davomat — <span id="todayDate"></span></h2>
+          <button class="ghost" style="width:auto;padding:6px 10px;margin:0;border-radius:7px;font-size:11px;" id="btnRefresh">Yangilash</button>
+        </div>
+        <div id="logTableWrap" style="margin-top:10px;"></div>
+        <button class="primary" id="btnSendTelegram">📨 Kunni yakunlab, Telegramga yuborish</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const todayKey = () => {
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+};
+function showToast(msg, ms=2600){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('show'), ms);
+}
+
+// ---------- Firebase (bulutli, barcha qurilmalar uchun umumiy) ----------
+// TODO: pastdagi qiymatlarni o'z Firebase loyihangiz konfiguratsiyasiga almashtiring.
+// Yo'riqnoma: O'RNATISH-YORIQNOMASI.md faylida.
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+const FIREBASE_READY = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
+let db = null;
+if(FIREBASE_READY){
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+} else {
+  document.addEventListener('DOMContentLoaded', ()=> $('#setupBanner').classList.add('show'));
+}
+const COLLECTION = 'attendance_app';
+
+// ---------- storage helpers (bulut = umumiy, local = shu qurilmaga xos) ----------
+async function getShared(key){
+  if(!db) return null;
+  try{
+    const doc = await db.collection(COLLECTION).doc(key).get();
+    return doc.exists ? doc.data().value : null;
+  }catch(e){ return null; }
+}
+async function setShared(key, val){
+  if(!db){ showToast('Ilova bulutga ulanmagan — sozlamalarni tekshiring'); return null; }
+  try{
+    await db.collection(COLLECTION).doc(key).set({ value: val, updatedAt: Date.now() });
+    return true;
+  }catch(e){ showToast('Saqlashda xatolik: internetni tekshiring'); return null; }
+}
+function getLocal(key){
+  try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+  catch(e){ return null; }
+}
+function setLocal(key, val){
+  try{ localStorage.setItem(key, JSON.stringify(val)); return true; }
+  catch(e){ return null; }
+}
+
+// ---------- tabs ----------
+document.querySelectorAll('nav button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('main section').forEach(s=>s.classList.remove('active'));
+    btn.classList.add('active');
+    $('#'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab === 'tab-log') renderLog();
+  });
+});
+
+// ---------- config (shared) ----------
+let config = { schoolName:'', lat:null, lng:null, radius:80, qrValue:null, qrUpdatedAt:null };
+
+async function loadConfig(){
+  const c = await getShared('config');
+  if(c){
+    config = c;
+    $('#schoolName').value = config.schoolName || '';
+    $('#lat').value = config.lat ?? '';
+    $('#lng').value = config.lng ?? '';
+    $('#radius').value = config.radius ?? 80;
+    $('#headerSchool').textContent = config.schoolName || 'Maktab davomat nazorati';
+    if(config.lat && config.lng){
+      $('#locStatus').innerHTML = '<span class="status-pill ok"><span class="dot"></span>Maktab nuqtasi belgilangan</span>';
+    }
+    renderQr();
+  }
+}
+
+$('#btnLocate').addEventListener('click', ()=>{
+  if(!navigator.geolocation){ showToast('Bu qurilmada GPS mavjud emas'); return; }
+  $('#locStatus').innerHTML = 'Joylashuv aniqlanmoqda...';
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    config.lat = +pos.coords.latitude.toFixed(6);
+    config.lng = +pos.coords.longitude.toFixed(6);
+    $('#lat').value = config.lat;
+    $('#lng').value = config.lng;
+    await saveConfigCore();
+    $('#locStatus').innerHTML = '<span class="status-pill ok"><span class="dot"></span>Maktab nuqtasi belgilandi</span>';
+    showToast('Maktab joylashuvi saqlandi');
+  }, err=>{
+    $('#locStatus').innerHTML = '<span class="status-pill bad"><span class="dot"></span>Joylashuvga ruxsat berilmadi</span>';
+  }, {enableHighAccuracy:true, timeout:12000});
+});
+
+$('#radius').addEventListener('change', saveConfigCore);
+$('#schoolName').addEventListener('change', ()=>{
+  $('#headerSchool').textContent = $('#schoolName').value || 'Maktab davomat nazorati';
+  saveConfigCore();
+});
+
+async function saveConfigCore(){
+  config.schoolName = $('#schoolName').value;
+  config.radius = +$('#radius').value || 80;
+  await setShared('config', config);
+}
+
+// ---------- QR ----------
+function renderQr(){
+  const wrap = $('#qrcode');
+  wrap.innerHTML = '';
+  const btn = $('#btnNewQr');
+  if(!config.qrValue){
+    $('#qrMeta').textContent = 'QR hali yaratilmagan — pastdagi tugmani bosing';
+    btn.textContent = '✅ Doimiy QR kod yaratish';
+    return;
+  }
+  new QRCode(wrap, { text: config.qrValue, width:200, height:200, colorDark:'#152238', colorLight:'#ffffff' });
+  const dt = config.qrUpdatedAt ? new Date(config.qrUpdatedAt).toLocaleString('uz-UZ') : '';
+  $('#qrMeta').textContent = 'Yaratilgan: ' + dt + ' — doimiy amal qiladi';
+  btn.textContent = '🔄 QR kodni almashtirish (faqat zarurat bo\'lsa)';
+}
+
+$('#btnNewQr').addEventListener('click', async ()=>{
+  const isFirstTime = !config.qrValue;
+  if(!isFirstTime && !confirm('Diqqat: joriy QR kod ishdan chiqadi va chop etilgan eski QR endi ishlamaydi. Davom etasizmi?')){
+    return;
+  }
+  config.qrValue = 'SCH-' + Math.random().toString(36).slice(2,10).toUpperCase() + '-' + Date.now();
+  config.qrUpdatedAt = new Date().toISOString();
+  await saveConfigCore();
+  await setShared('config', config);
+  renderQr();
+  showToast(isFirstTime ? 'Doimiy QR kod yaratildi' : 'QR kod almashtirildi. Eskisi endi ishlamaydi.');
+});
+
+// ---------- staff ----------
+async function loadStaff(){
+  const list = (await getShared('staff')) || [];
+  renderStaff(list);
+}
+function renderStaff(list){
+  const wrap = $('#staffList');
+  if(!list.length){ wrap.innerHTML = '<div class="empty">Xodimlar qo\'shilmagan</div>'; return; }
+  wrap.innerHTML = list.map((name,i)=>`
+    <div class="staff-item">
+      <span>${escapeHtml(name)}</span>
+      <button data-i="${i}" class="delStaff">O'chirish</button>
+    </div>`).join('');
+  wrap.querySelectorAll('.delStaff').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const list2 = (await getShared('staff')) || [];
+      list2.splice(+b.dataset.i,1);
+      await setShared('staff', list2);
+      renderStaff(list2);
+    });
+  });
+}
+$('#btnAddStaff').addEventListener('click', async ()=>{
+  const name = $('#newStaffName').value.trim();
+  if(!name) return;
+  const list = (await getShared('staff')) || [];
+  list.push(name);
+  await setShared('staff', list);
+  $('#newStaffName').value = '';
+  renderStaff(list);
+  showToast('Xodim qo\'shildi');
+});
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// ---------- telegram settings (local, per device) ----------
+async function loadTelegram(){
+  const t = await getLocal('telegram');
+  if(t){ $('#botToken').value = t.botToken || ''; $('#chatId').value = t.chatId || ''; }
+}
+$('#btnSaveTelegram').addEventListener('click', async ()=>{
+  await setLocal('telegram', { botToken: $('#botToken').value.trim(), chatId: $('#chatId').value.trim() });
+  showToast('Telegram sozlamalari saqlandi');
+});
+
+// ---------- log ----------
+$('#todayDate').textContent = new Date().toLocaleDateString('uz-UZ');
+$('#btnRefresh').addEventListener('click', renderLog);
+
+function renderLogTable(log){
+  const wrap = $('#logTableWrap');
+  if(!log.length){ wrap.innerHTML = '<div class="empty">Bugun hali hech kim belgilanmagan</div>'; return; }
+  const rows = log.map(r=>`
+    <tr>
+      <td>${escapeHtml(r.name)}</td>
+      <td>${new Date(r.time).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</td>
+      <td><span class="tag ${r.type==='kelish'?'in':'out'}">${r.type==='kelish'?'Keldi':'Ketdi'}</span></td>
+      <td>${r.distance!=null ? r.distance+' m' : '-'}</td>
+    </tr>`).join('');
+  wrap.innerHTML = `<table>
+    <tr><th>Ism</th><th>Vaqt</th><th>Holat</th><th>Masofa</th></tr>
+    ${rows}
+  </table>`;
+}
+
+async function renderLog(){
+  const log = (await getShared('log:' + todayKey())) || [];
+  renderLogTable(log);
+}
+
+let logUnsub = null;
+function subscribeLog(){
+  if(!db) return;
+  if(logUnsub) logUnsub();
+  logUnsub = db.collection(COLLECTION).doc('log:' + todayKey())
+    .onSnapshot(doc=> renderLogTable(doc.exists ? (doc.data().value || []) : []));
+}
+
+$('#btnSendTelegram').addEventListener('click', async ()=>{
+  const t = await getLocal('telegram');
+  if(!t || !t.botToken || !t.chatId){
+    showToast('Avval Sozlamalar bo\'limida Telegram bot ma\'lumotlarini kiriting');
+    return;
+  }
+  const key = 'log:' + todayKey();
+  const log = (await getShared(key)) || [];
+  if(!log.length){ showToast('Bugun hali yozuv yo\'q'); return; }
+
+  let text = `📋 ${config.schoolName || 'Maktab'} — ${new Date().toLocaleDateString('uz-UZ')} davomati\n\n`;
+  log.forEach(r=>{
+    const icon = r.type==='kelish' ? '🟢 Keldi' : '🔴 Ketdi';
+    text += `${icon} — ${r.name} — ${new Date(r.time).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}\n`;
+  });
+
+  try{
+    const res = await fetch(`https://api.telegram.org/bot${t.botToken}/sendMessage`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ chat_id: t.chatId, text })
+    });
+    const data = await res.json();
+    if(data.ok){ showToast('Telegramga yuborildi ✅'); }
+    else{ showToast('Xatolik: ' + (data.description || 'noma\'lum')); }
+  }catch(e){
+    showToast('Telegramga ulanib bo\'lmadi. Internetni tekshiring.');
+  }
+});
+
+// ---------- init ----------
+(async function init(){
+  await loadConfig();
+  await loadStaff();
+  await loadTelegram();
+  renderLog();
+  subscribeLog(); // yangi yozuvlar darhol ko'rinadi
+})();
+
+// ---------- PWA: ilova sifatida o'rnatish ----------
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('director-sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
