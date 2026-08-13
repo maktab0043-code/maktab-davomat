@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>O'qituvchi — Kelish/Ketish</title>
+
+<!-- Ilova (PWA) sifatida o'rnatish uchun -->
+<link rel="manifest" href="oqituvchi-manifest.json">
+<meta name="theme-color" content="#152238">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Davomat">
+<link rel="apple-touch-icon" href="teacher-icon-180.png">
+<link rel="icon" href="teacher-icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --navy:#152238; --navy-2:#1f3252;
+    --gold:#c9972f; --gold-dim:#e6c878;
+    --paper:#f6f3ec; --paper-2:#ffffff;
+    --ink:#1c1c1c; --muted:#6b7280; --line:#e4ded0;
+    --ok:#2f7a4f; --bad:#b0402c; --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;min-height:100vh;}
+  .shell{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
+  header{
+    background:linear-gradient(160deg,var(--navy),var(--navy-2));color:#fff;
+    padding:22px 20px 26px;position:relative;overflow:hidden;
+  }
+  header::after{content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;border-radius:50%;
+    background:radial-gradient(circle,rgba(201,151,47,.35),transparent 70%);}
+  header .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-dim);font-weight:600;}
+  header h1{font-family:'Manrope',sans-serif;font-weight:800;font-size:22px;margin:6px 0 2px;}
+  header .sub{font-size:13px;color:#c9d2e0;}
+
+  main{flex:1;padding:18px 18px 40px;}
+  .card{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;}
+  .card h2{font-family:'Manrope';font-size:15px;margin:0 0 4px;font-weight:700;}
+  .card p.hint{font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.5;}
+
+  select,input[type=text]{
+    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px;
+    font-family:'Inter';background:#fdfcf9;
+  }
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:0 0 5px;}
+
+  .status-pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:999px;}
+  .status-pill.ok{background:#e6f2ea;color:var(--ok);}
+  .status-pill.bad{background:#fbe9e5;color:var(--bad);}
+  .status-pill.wait{background:#f0eee5;color:var(--muted);}
+  .dot{width:7px;height:7px;border-radius:50%;background:currentColor;}
+
+  button.primary{
+    width:100%;padding:13px;border:none;border-radius:9px;background:var(--navy);color:#fff;
+    font-weight:700;font-size:14.5px;cursor:pointer;margin-top:14px;font-family:'Inter';
+  }
+  button.primary:disabled{opacity:.4;cursor:not-allowed;}
+  button.ghost{background:none;border:1px solid var(--line);color:var(--navy);}
+
+  #video{width:100%;border-radius:10px;background:#000;display:block;}
+  .scan-wrap{position:relative;margin-top:12px;}
+  .scan-frame{
+    position:absolute;inset:14%;border:3px solid var(--gold);border-radius:14px;
+    box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none;
+  }
+  .result{
+    display:none;text-align:center;padding:26px 10px;
+  }
+  .result.show{display:block;}
+  .result .icon{font-size:44px;}
+  .result h3{font-family:'Manrope';margin:8px 0 4px;}
+  .result p{color:var(--muted);font-size:13px;margin:0;}
+  .distance-note{font-size:11.5px;color:var(--muted);margin-top:8px;}
+  .setup-banner{
+    background:#fbe9e5;color:#7a2c1a;font-size:12.5px;padding:10px 16px;line-height:1.5;
+    border-bottom:1px solid #f0c9bd;display:none;
+  }
+  .setup-banner.show{display:block;}
+  .setup-banner code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="setup-banner" id="setupBanner">
+    ⚠️ Ilova hali bulutga ulanmagan. Iltimos, direktordan yangilangan havolani so'rang.
+  </div>
+  <header>
+    <div class="eyebrow">O'qituvchi</div>
+    <h1 id="headerSchool">Kelish/Ketish belgilash</h1>
+    <div class="sub" id="dateSub"></div>
+  </header>
+
+  <main>
+    <div class="card">
+      <h2>1. Ismingizni tanlang</h2>
+      <label>F.I.Sh.</label>
+      <select id="staffSelect"><option value="">Yuklanmoqda...</option></select>
+    </div>
+
+    <div class="card">
+      <h2>2. Joylashuv tekshiruvi</h2>
+      <p class="hint">QR skanerlashdan oldin siz maktab hududida ekanligingiz tekshiriladi.</p>
+      <div id="geoStatus"><span class="status-pill wait"><span class="dot"></span>Joylashuv aniqlanmoqda...</span></div>
+      <div class="distance-note" id="distanceNote"></div>
+    </div>
+
+    <div class="card" id="scanCard">
+      <h2>3. QR kodni skanerlang</h2>
+      <p class="hint">Maktab kirish eshigi yonidagi QR kodni kameraga ko'rsating.</p>
+      <button class="primary" id="btnStartScan" disabled>📷 Kamerani ochish</button>
+      <div class="scan-wrap" id="scanWrap" style="display:none;">
+        <video id="video" playsinline muted></video>
+        <div class="scan-frame"></div>
+      </div>
+      <canvas id="canvas" style="display:none;"></canvas>
+
+      <div class="result" id="result">
+        <div class="icon" id="resultIcon">✅</div>
+        <h3 id="resultTitle">Muvaffaqiyatli belgilandi</h3>
+        <p id="resultText"></p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const todayKey = () => {
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+};
+$('#dateSub').textContent = new Date().toLocaleDateString('uz-UZ', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+
+// TODO: pastdagi qiymatlarni direktor ilovasidagi bilan BIR XIL Firebase konfiguratsiyasiga almashtiring.
+// Yo'riqnoma: O'RNATISH-YORIQNOMASI.md faylida.
+const firebaseConfig = {
+  apiKey: "AIzaSyDCoO4FPrck2CN0An711GThdTWGs5_x9rA",
+  authDomain: "maktab-davomat-87bb8.firebaseapp.com",
+  projectId: "maktab-davomat-87bb8",
+  storageBucket: "maktab-davomat-87bb8.firebasestorage.app",
+  messagingSenderId: "547450443550",
+  appId: "1:547450443550:web:c1976145e30c543b289b0f"
+};
+const FIREBASE_READY = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
+let db = null;
+if(FIREBASE_READY){
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+} else {
+  document.addEventListener('DOMContentLoaded', ()=> $('#setupBanner').classList.add('show'));
+}
+const COLLECTION = 'attendance_app';
+
+async function getShared(key){
+  if(!db) return null;
+  try{
+    const doc = await db.collection(COLLECTION).doc(key).get();
+    return doc.exists ? doc.data().value : null;
+  }catch(e){ return null; }
+}
+async function setShared(key, val){
+  if(!db) return null;
+  try{
+    await db.collection(COLLECTION).doc(key).set({ value: val, updatedAt: Date.now() });
+    return true;
+  }catch(e){ return null; }
+}
+
+function haversine(lat1,lng1,lat2,lng2){
+  const R = 6371000;
+  const toRad = d => d*Math.PI/180;
+  const dLat = toRad(lat2-lat1), dLng = toRad(lng2-lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+let config = null;
+let currentPos = null;
+let withinRange = false;
+let scanning = false;
+let stream = null;
+
+async function loadConfig(){
+  config = await getShared('config');
+  if(config && config.schoolName) $('#headerSchool').textContent = config.schoolName;
+  if(!config || !config.lat){
+    $('#geoStatus').innerHTML = '<span class="status-pill bad"><span class="dot"></span>Direktor hali maktab joylashuvini belgilamagan</span>';
+    return;
+  }
+  startWatchingPosition();
+}
+
+async function loadStaff(){
+  const list = (await getShared('staff')) || [];
+  const sel = $('#staffSelect');
+  if(!list.length){
+    sel.innerHTML = '<option value="">Xodimlar ro\'yxati hali kiritilmagan</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">— tanlang —</option>' + list.map(n=>`<option value="${n}">${n}</option>`).join('');
+}
+
+function startWatchingPosition(){
+  if(!navigator.geolocation){
+    $('#geoStatus').innerHTML = '<span class="status-pill bad"><span class="dot"></span>Bu qurilmada GPS mavjud emas</span>';
+    return;
+  }
+  navigator.geolocation.watchPosition(pos=>{
+    currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    const dist = Math.round(haversine(currentPos.lat, currentPos.lng, config.lat, config.lng));
+    withinRange = dist <= (config.radius || 80);
+    updateGeoUi(dist);
+  }, err=>{
+    $('#geoStatus').innerHTML = '<span class="status-pill bad"><span class="dot"></span>Joylashuvga ruxsat berilmadi</span>';
+    withinRange = false;
+    updateScanAvailability();
+  }, { enableHighAccuracy:true, maximumAge:4000, timeout:15000 });
+}
+
+function updateGeoUi(dist){
+  if(withinRange){
+    $('#geoStatus').innerHTML = '<span class="status-pill ok"><span class="dot"></span>Siz maktab hududidasiz</span>';
+  } else {
+    $('#geoStatus').innerHTML = '<span class="status-pill bad"><span class="dot"></span>Maktab hududidan tashqaridasiz</span>';
+  }
+  $('#distanceNote').textContent = `Maktab nuqtasigacha masofa: ~${dist} m (ruxsat etilgan: ${config.radius || 80} m)`;
+  updateScanAvailability();
+}
+
+function updateScanAvailability(){
+  const staffChosen = !!$('#staffSelect').value;
+  $('#btnStartScan').disabled = !(withinRange && staffChosen);
+}
+$('#staffSelect').addEventListener('change', updateScanAvailability);
+
+// ---------- camera + QR scan ----------
+$('#btnStartScan').addEventListener('click', async ()=>{
+  if(!withinRange){ return; }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+  }catch(e){
+    alert('Kameraga ruxsat berilmadi. Brauzer sozlamalaridan kameraga ruxsat bering.');
+    return;
+  }
+  const video = $('#video');
+  video.srcObject = stream;
+  await video.play();
+  $('#scanWrap').style.display = 'block';
+  $('#btnStartScan').style.display = 'none';
+  scanning = true;
+  requestAnimationFrame(scanLoop);
+});
+
+function scanLoop(){
+  if(!scanning) return;
+  const video = $('#video');
+  const canvas = $('#canvas');
+  if(video.readyState === video.HAVE_ENOUGH_DATA){
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    if(code && code.data){
+      onQrDetected(code.data);
+      return;
+    }
+  }
+  requestAnimationFrame(scanLoop);
+}
+
+function stopCamera(){
+  scanning = false;
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
+  $('#scanWrap').style.display = 'none';
+}
+
+async function onQrDetected(qrData){
+  stopCamera();
+
+  // qayta tekshirish: joylashuv hali ham to'g'rimi
+  if(!withinRange || !currentPos){
+    showResult(false, 'Joylashuv mos kelmadi', 'Skanerlash vaqtida siz maktab hududidan tashqarida edingiz. Iltimos, hududga kirib qayta urinib ko\'ring.');
+    return;
+  }
+
+  // config'ni qayta yuklab, QR eskirmaganini tekshirish
+  const freshConfig = await getShared('config');
+  if(!freshConfig || freshConfig.qrValue !== qrData){
+    showResult(false, 'QR kod noto\'g\'ri yoki eskirgan', 'Iltimos, kirish eshigidagi joriy QR kodni skanerlang. Ehtimol direktor yangi QR kod yaratgan.');
+    return;
+  }
+
+  const name = $('#staffSelect').value;
+  if(!name){
+    showResult(false, 'Ism tanlanmagan', 'Iltimos ismingizni tanlab, qaytadan urinib ko\'ring.');
+    return;
+  }
+
+  const key = 'log:' + todayKey();
+  const log = (await getShared(key)) || [];
+  const mine = log.filter(r=>r.name === name);
+
+  if(mine.length >= 2){
+    showResult(false, 'Bugun allaqachon belgilangan', `${name}, siz bugun kelish va ketish vaqtingizni allaqachon belgilagansiz.`);
+    return;
+  }
+
+  const type = mine.length === 0 ? 'kelish' : 'ketish';
+  const dist = Math.round(haversine(currentPos.lat, currentPos.lng, freshConfig.lat, freshConfig.lng));
+
+  log.push({
+    name, type, time: new Date().toISOString(),
+    lat: currentPos.lat, lng: currentPos.lng, distance: dist
+  });
+  await setShared(key, log);
+
+  showResult(true,
+    type === 'kelish' ? 'Kelishingiz belgilandi ✅' : 'Ketishingiz belgilandi ✅',
+    `${name} — ${new Date().toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}. Ma'lumot direktor ilovasiga yuborildi.`
+  );
+}
+
+function showResult(ok, title, text){
+  $('#result').classList.add('show');
+  $('#resultIcon').textContent = ok ? '✅' : '⚠️';
+  $('#resultTitle').textContent = title;
+  $('#resultText').textContent = text;
+  const btn = $('#btnStartScan');
+  btn.style.display = 'block';
+  btn.textContent = '🔄 Qayta urinish';
+  updateScanAvailability();
+}
+
+// ---------- init ----------
+(async function init(){
+  await loadConfig();
+  await loadStaff();
+})();
+
+// ---------- PWA: ilova sifatida o'rnatish ----------
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('oqituvchi-sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
