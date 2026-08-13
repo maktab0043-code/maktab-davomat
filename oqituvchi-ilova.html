@@ -4,21 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>O'qituvchi — Kelish/Ketish</title>
-
-<!-- Ilova (PWA) sifatida o'rnatish uchun -->
-<link rel="manifest" href="oqituvchi-manifest.json">
-<meta name="theme-color" content="#152238">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Davomat">
-<link rel="apple-touch-icon" href="teacher-icon-180.png">
-<link rel="icon" href="teacher-icon-192.png">
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --navy:#152238; --navy-2:#1f3252;
@@ -78,19 +66,10 @@
   .result h3{font-family:'Manrope';margin:8px 0 4px;}
   .result p{color:var(--muted);font-size:13px;margin:0;}
   .distance-note{font-size:11.5px;color:var(--muted);margin-top:8px;}
-  .setup-banner{
-    background:#fbe9e5;color:#7a2c1a;font-size:12.5px;padding:10px 16px;line-height:1.5;
-    border-bottom:1px solid #f0c9bd;display:none;
-  }
-  .setup-banner.show{display:block;}
-  .setup-banner code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;}
 </style>
 </head>
 <body>
 <div class="shell">
-  <div class="setup-banner" id="setupBanner">
-    ⚠️ Ilova hali bulutga ulanmagan. Iltimos, direktordan yangilangan havolani so'rang.
-  </div>
   <header>
     <div class="eyebrow">O'qituvchi</div>
     <h1 id="headerSchool">Kelish/Ketish belgilash</h1>
@@ -138,39 +117,13 @@ const todayKey = () => {
 };
 $('#dateSub').textContent = new Date().toLocaleDateString('uz-UZ', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
 
-// TODO: pastdagi qiymatlarni direktor ilovasidagi bilan BIR XIL Firebase konfiguratsiyasiga almashtiring.
-// Yo'riqnoma: O'RNATISH-YORIQNOMASI.md faylida.
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-const FIREBASE_READY = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
-let db = null;
-if(FIREBASE_READY){
-  firebase.initializeApp(firebaseConfig);
-  db = firebase.firestore();
-} else {
-  document.addEventListener('DOMContentLoaded', ()=> $('#setupBanner').classList.add('show'));
-}
-const COLLECTION = 'attendance_app';
-
 async function getShared(key){
-  if(!db) return null;
-  try{
-    const doc = await db.collection(COLLECTION).doc(key).get();
-    return doc.exists ? doc.data().value : null;
-  }catch(e){ return null; }
+  try{ const r = await window.storage.get(key, true); return r ? JSON.parse(r.value) : null; }
+  catch(e){ return null; }
 }
 async function setShared(key, val){
-  if(!db) return null;
-  try{
-    await db.collection(COLLECTION).doc(key).set({ value: val, updatedAt: Date.now() });
-    return true;
-  }catch(e){ return null; }
+  try{ return await window.storage.set(key, JSON.stringify(val), true); }
+  catch(e){ return null; }
 }
 
 function haversine(lat1,lng1,lat2,lng2){
@@ -345,13 +298,6 @@ function showResult(ok, title, text){
   await loadConfig();
   await loadStaff();
 })();
-
-// ---------- PWA: ilova sifatida o'rnatish ----------
-if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('oqituvchi-sw.js').catch(()=>{});
-  });
-}
 </script>
 </body>
 </html>
