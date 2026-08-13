@@ -1,0 +1,14 @@
+{
+  "name": "Direktor — Davomat nazorati",
+  "short_name": "Direktor",
+  "start_url": "director-ilova.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f3ec",
+  "theme_color": "#152238",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "director-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "director-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
